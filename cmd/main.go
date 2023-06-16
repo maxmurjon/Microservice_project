@@ -1,14 +1,12 @@
 package main
 
 import (
-	"backend-templates/golang-psql/config"
-	"backend-templates/golang-psql/genproto/book_service"
-	"backend-templates/golang-psql/grpc"
-	"backend-templates/golang-psql/grpc/client"
-	"backend-templates/golang-psql/pkg/logger"
-	"backend-templates/golang-psql/storage/postgres"
 	"context"
 	"net"
+	"organization_service/config"
+	"organization_service/grpc"
+	"organization_service/pkg/logger"
+	"organization_service/storage/postgres"
 
 	"github.com/gin-gonic/gin"
 )
@@ -39,14 +37,24 @@ func main() {
 	}
 	defer pgStore.CloseDB()
 
-	svcs, err := client.NewGrpcClients(cfg)
-	if err != nil {
-		log.Panic("client.NewGrpcClients", logger.Error(err))
-	}
+	// fmt.Println(pgStore.Branch().Create(context.Background(),&organization_service.CreateBranchRequest{BranchCode: "maxmurjon",Name: "sndivnsfd",Address: "asfnoisdngiovrsn",PhoneNumber: "+998971153311"}))
 
-	grpcServer := grpc.SetUpServer(cfg, log, pgStore, svcs) // ! Yangi Server ochib qaytarmoqda
+	// fmt.Println(pgStore.Branch().Get(context.Background(),&organization_service.PrimaryKey{Id: "7df95af6-17aa-4dd6-9f90-a01d29ebd5ee"}))
 
-	lis, err := net.Listen("tcp", cfg.ServicePort) // ! tcp connection li server ko'tarilmoqda
+	// fmt.Println(pgStore.Branch().Update(context.Background(),&organization_service.UpdateBranchRequest{Branch: &organization_service.Branch{Id: "7df95af6-17aa-4dd6-9f90-a01d29ebd5ee",BranchCode: "MP-0000001",Name: "Mega Planet",Address: "Yunusobot",PhoneNumber: "+998971153311"}}))
+
+	// fmt.Println(pgStore.Branch().Delete(context.Background(),&organization_service.PrimaryKey{Id: "7df95af6-17aa-4dd6-9f90-a01d29ebd5ee"}))
+
+	// fmt.Println(pgStore.Branch().PatchUpdate(context.Background(),&organization_service.PatchUpdateRequest{Id: "99bbf686-6b4b-4398-bfdb-1e15fe239742",Params: []*organization_service.Obj{{Key: "branch_code",Value: "MP-0000001"}}}))
+
+	// svcs, err := client.NewGrpcClients(cfg)
+	// if err != nil {
+	// 	log.Panic("client.NewGrpcClients", logger.Error(err))
+	// }
+
+	grpcServer := grpc.SetUpServer(cfg, log, pgStore)
+
+	lis, err := net.Listen("tcp", cfg.ServicePort)
 	if err != nil {
 		log.Panic("net.Listen", logger.Error(err))
 	}

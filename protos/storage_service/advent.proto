@@ -1,0 +1,38 @@
+syntax="proto3";
+
+package organization_service;
+option go_package="genproto/organization_service";
+
+// import "google/protobuf/struct.proto";
+
+message Advent{
+    string id=1;
+    string branchId=2;
+    string supplierId=3;
+    string status=4;
+    string AdventId=5;
+    string createdAt=6;
+}
+
+message CreateAdventRequest{
+    string branchId=1;
+    string supplierId=2;
+    string status=3;
+    string AdventId=4;
+    string createdAt=5;
+}
+
+message GetListAdventRequest{
+    string branch=1;
+    string adventId=2;
+}
+
+message GetAdventsListResponse {
+    repeated Advent advents = 1;
+    int32 count = 2;
+}
+
+message UpdateAdventRequest {
+    Advent advent = 1;
+}
+

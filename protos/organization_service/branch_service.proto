@@ -1,0 +1,16 @@
+syntax="proto3";
+
+package organization_service;
+option go_package="genproto/organization_service";
+
+import "branch.proto";
+import "google/protobuf/empty.proto";
+
+service BranchService {
+    rpc Create (CreateBranchRequest) returns (Branch);
+    rpc Get (PrimaryKey) returns (Branch);
+    rpc GetList (GetListBranchRequest) returns (GetBranchsListResponse);
+    rpc Update (UpdateBranchRequest) returns (Branch);
+    rpc PatchUpdate (PatchUpdateRequest) returns (Branch);
+    rpc Delete (PrimaryKey) returns (google.protobuf.Empty);
+}

@@ -1,0 +1,39 @@
+syntax="proto3";
+
+package organization_service;
+option go_package="genproto/organization_service";
+
+// import "google/protobuf/struct.proto";
+
+message Product{
+    string id=1;
+    string name=2;
+    string photo=3;
+    string categoryId=4;
+    string brandId=5;
+    string barcode=6;
+    string price=7;
+}
+
+message CreateProductRequest{
+    string name=1;
+    string photo=2;
+    string categoryId=3;
+    string brandId=4;
+    string barcode=5;
+    string price=6;
+}
+
+message GetListProductRequest{
+    string name=1;
+}
+
+message GetProductsListResponse {
+    repeated Product products = 1;
+    int32 count = 2;
+}
+
+message UpdateProductRequest {
+    Product product = 1;
+}
+

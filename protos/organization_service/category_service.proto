@@ -1,0 +1,17 @@
+syntax="proto3";
+
+package organization_service;
+option go_package="genproto/organization_service";
+
+import "category.proto";
+import "branch.proto";
+import "google/protobuf/empty.proto";
+
+service CategoryService {
+    rpc Create (CreateCategoryRequest) returns (Category);
+    rpc Get(PrimaryKey) returns (Category);
+    rpc GetList (GetCategorysListRequest) returns (GetCategorysListResponse);
+    rpc Update (UpdateCategoryRequest) returns (Category);
+    rpc PatchUpdate (PatchUpdateRequest) returns (Category);
+    rpc Delete (PrimaryKey) returns (google.protobuf.Empty);
+}

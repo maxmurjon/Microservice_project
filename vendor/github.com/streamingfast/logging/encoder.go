@@ -39,13 +39,14 @@ const (
 
 var bufferpool = buffer.NewPool()
 var levelToColor map[zapcore.Level]Color
+var levelToShort map[zapcore.Level]string
 
 var _loggerPool = sync.Pool{New: func() interface{} {
 	return &Encoder{}
 }}
 
 func init() {
-	levelToColor = make(map[zapcore.Level]Color)
+	levelToColor = make(map[zapcore.Level]Color, 7)
 	levelToColor[zap.DebugLevel] = MagentaFg
 	levelToColor[zap.InfoLevel] = GreenFg
 	levelToColor[zap.WarnLevel] = BrownFg
@@ -53,6 +54,15 @@ func init() {
 	levelToColor[zap.DPanicLevel] = RedFg
 	levelToColor[zap.PanicLevel] = RedFg
 	levelToColor[zap.FatalLevel] = RedFg
+
+	levelToShort = make(map[zapcore.Level]string, 7)
+	levelToShort[zap.DebugLevel] = "DEBG"
+	levelToShort[zap.InfoLevel] = "INFO"
+	levelToShort[zap.WarnLevel] = "WARN"
+	levelToShort[zap.ErrorLevel] = "ERRO"
+	levelToShort[zap.DPanicLevel] = "PANI"
+	levelToShort[zap.PanicLevel] = "PANI"
+	levelToShort[zap.FatalLevel] = "FATA"
 }
 
 type Encoder struct {
@@ -136,17 +146,29 @@ func (c Encoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field) (*buffer
 	lineColor := levelColor(ent.Level)
 
 	if c.showTime {
-		line.AppendString(c.colorString(grayFg.Nos(true), ent.Time.Format("2006-01-02T15:04:05.000Z0700")+" "))
+		line.AppendString(c.colorString(grayFg.Nos(true), ent.Time.Format("2006-01-02T15:04:05.000Z0700")))
+		line.AppendString(" ")
 	}
 
-	showLoggerName := c.showLoggerName && ent.LoggerName != ""
-	if showLoggerName {
+	shortLevel, found := levelToShort[ent.Level]
+	if !found {
+		shortLevel = "UNKN"
+	}
+
+	line.AppendString(c.colorString(lineColor.Nos(true), shortLevel))
+	line.AppendString(" ")
+
+	if c.showLoggerName {
 		loggerName := ent.LoggerName
-		if loggerName == "common" && ent.Caller.Defined {
-			base := path.Base(ent.Caller.FullPath())
-			packagePath := strings.Split(base, ".")[0]
-			if packagePath != "" {
-				loggerName = packagePath
+		if loggerName == "" {
+			if ent.Caller.Defined {
+				base := path.Base(ent.Caller.FullPath())
+				packagePath := strings.Split(base, ".")[0]
+				if packagePath != "" {
+					loggerName = packagePath
+				}
+			} else {
+				loggerName = "<n/a>"
 			}
 		}
 

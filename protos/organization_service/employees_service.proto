@@ -1,0 +1,17 @@
+syntax="proto3";
+
+package organization_service;
+option go_package="genproto/organization_service";
+
+import "employees.proto";
+import "branch.proto";
+import "google/protobuf/empty.proto";
+
+service EmployeesService {
+    rpc Create (CreateEmployeesRequest) returns (Employees);
+    rpc Get(PrimaryKey) returns (Employees);
+    rpc GetList (GetEmployeesListRequest) returns (GetEmployeessListResponse);
+    rpc Update (UpdateEmployeesRequest) returns (Employees);
+    rpc PatchUpdate (PatchUpdateRequest) returns (Employees);
+    rpc Delete (PrimaryKey) returns (google.protobuf.Empty);
+}

@@ -1,0 +1,29 @@
+syntax="proto3";
+
+package organization_service;
+option go_package="genproto/organization_service";
+
+
+message Store{
+    string id=1;
+    string branchId=2;
+    string name=3;
+}
+
+message CreateStoreRequest{
+    string branchId=1;
+    string name=2;
+}
+
+message GetListStoreRequest{
+    string name=1;
+}
+
+message GetStoresListResponse {
+    repeated Store stores = 1;
+    int32 count = 2;
+}
+
+message UpdateStoreRequest {
+    Store Store = 1;
+}

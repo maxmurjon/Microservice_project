@@ -1,0 +1,42 @@
+syntax="proto3";
+
+package organization_service;
+option go_package="genproto/organization_service";
+
+// import "google/protobuf/struct.proto";
+
+message Employees{
+    string id=1;
+    string firstName=2;
+    string lastName=3;
+    string storeId=4;
+    string phoneNumber=5;
+    string login=6;
+    string passwordHash=7;
+    string role=8;
+}
+
+message CreateEmployeesRequest{
+    string firstName=1;
+    string lastName=2;
+    string storeId=3;
+    string phoneNumber=4;
+    string login=5;
+    string passwordHash=6;
+    string role=7;
+}
+
+message GetEmployeesListRequest{
+    string firstName=1;
+    string lastName=2;
+}
+
+message GetEmployeessListResponse {
+    repeated Employees employeess = 1;
+    int32 count = 2;
+}
+
+message UpdateEmployeesRequest {
+    Employees employees = 1;
+}
+

@@ -42,6 +42,11 @@ type ConnConfig struct {
 	createdByParseConfig bool // Used to enforce created by ParseConfig rule.
 }
 
+// ParseConfigOptions contains options that control how a config is built such as getsslpassword.
+type ParseConfigOptions struct {
+	pgconn.ParseConfigOptions
+}
+
 // Copy returns a deep copy of the config that is safe to use and modify.
 // The only exception is the tls.Config:
 // according to the tls.Config docs it must not be modified after creation.
@@ -110,6 +115,16 @@ func Connect(ctx context.Context, connString string) (*Conn, error) {
 	return connect(ctx, connConfig)
 }
 
+// ConnectWithOptions behaves exactly like Connect with the addition of options. At the present options is only used to
+// provide a GetSSLPassword function.
+func ConnectWithOptions(ctx context.Context, connString string, options ParseConfigOptions) (*Conn, error) {
+	connConfig, err := ParseConfigWithOptions(connString, options)
+	if err != nil {
+		return nil, err
+	}
+	return connect(ctx, connConfig)
+}
+
 // ConnectConfig establishes a connection with a PostgreSQL server with a configuration struct.
 // connConfig must have been created by ParseConfig.
 func ConnectConfig(ctx context.Context, connConfig *ConnConfig) (*Conn, error) {
@@ -120,22 +135,10 @@ func ConnectConfig(ctx context.Context, connConfig *ConnConfig) (*Conn, error) {
 	return connect(ctx, connConfig)
 }
 
-// ParseConfig creates a ConnConfig from a connection string. ParseConfig handles all options that pgconn.ParseConfig
-// does. In addition, it accepts the following options:
-//
-//	default_query_exec_mode
-//		Possible values: "cache_statement", "cache_describe", "describe_exec", "exec", and "simple_protocol". See
-//		QueryExecMode constant documentation for the meaning of these values. Default: "cache_statement".
-//
-//	statement_cache_capacity
-//		The maximum size of the statement cache used when executing a query with "cache_statement" query exec mode.
-//		Default: 512.
-//
-//	description_cache_capacity
-//		The maximum size of the description cache used when executing a query with "cache_describe" query exec mode.
-//		Default: 512.
-func ParseConfig(connString string) (*ConnConfig, error) {
-	config, err := pgconn.ParseConfig(connString)
+// ParseConfigWithOptions behaves exactly as ParseConfig does with the addition of options. At the present options is
+// only used to provide a GetSSLPassword function.
+func ParseConfigWithOptions(connString string, options ParseConfigOptions) (*ConnConfig, error) {
+	config, err := pgconn.ParseConfigWithOptions(connString, options.ParseConfigOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +178,7 @@ func ParseConfig(connString string) (*ConnConfig, error) {
 		case "simple_protocol":
 			defaultQueryExecMode = QueryExecModeSimpleProtocol
 		default:
-			return nil, fmt.Errorf("invalid default_query_exec_mode: %v", err)
+			return nil, fmt.Errorf("invalid default_query_exec_mode: %s", s)
 		}
 	}
 
@@ -189,6 +192,24 @@ func ParseConfig(connString string) (*ConnConfig, error) {
 	}
 
 	return connConfig, nil
+}
+
+// ParseConfig creates a ConnConfig from a connection string. ParseConfig handles all options that pgconn.ParseConfig
+// does. In addition, it accepts the following options:
+//
+//   - default_query_exec_mode.
+//     Possible values: "cache_statement", "cache_describe", "describe_exec", "exec", and "simple_protocol". See
+//     QueryExecMode constant documentation for the meaning of these values. Default: "cache_statement".
+//
+//   - statement_cache_capacity.
+//     The maximum size of the statement cache used when executing a query with "cache_statement" query exec mode.
+//     Default: 512.
+//
+//   - description_cache_capacity.
+//     The maximum size of the description cache used when executing a query with "cache_describe" query exec mode.
+//     Default: 512.
+func ParseConfig(connString string) (*ConnConfig, error) {
+	return ParseConfigWithOptions(connString, ParseConfigOptions{})
 }
 
 // connect connects to a database. connect takes ownership of config. The caller must not use or access it again.
@@ -305,6 +326,19 @@ func (c *Conn) Deallocate(ctx context.Context, name string) error {
 	return err
 }
 
+// DeallocateAll releases all previously prepared statements from the server and client, where it also resets the statement and description cache.
+func (c *Conn) DeallocateAll(ctx context.Context) error {
+	c.preparedStatements = map[string]*pgconn.StatementDescription{}
+	if c.config.StatementCacheCapacity > 0 {
+		c.statementCache = stmtcache.NewLRUCache(c.config.StatementCacheCapacity)
+	}
+	if c.config.DescriptionCacheCapacity > 0 {
+		c.descriptionCache = stmtcache.NewLRUCache(c.config.DescriptionCacheCapacity)
+	}
+	_, err := c.pgConn.Exec(ctx, "deallocate all").ReadAll()
+	return err
+}
+
 func (c *Conn) bufferNotifications(_ *pgconn.PgConn, n *pgconn.Notification) {
 	c.notifications = append(c.notifications, n)
 }
@@ -348,11 +382,9 @@ func quoteIdentifier(s string) string {
 	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }
 
-// Ping executes an empty sql statement against the *Conn
-// If the sql returns without error, the database Ping is considered successful, otherwise, the error is returned.
+// Ping delegates to the underlying *pgconn.PgConn.Ping.
 func (c *Conn) Ping(ctx context.Context) error {
-	_, err := c.Exec(ctx, ";")
-	return err
+	return c.pgConn.Ping(ctx)
 }
 
 // PgConn returns the underlying *pgconn.PgConn. This is an escape hatch method that allows lower level access to the
@@ -407,7 +439,10 @@ optionLoop:
 	}
 
 	if queryRewriter != nil {
-		sql, arguments = queryRewriter.RewriteQuery(ctx, c, sql, arguments)
+		sql, arguments, err = queryRewriter.RewriteQuery(ctx, c, sql, arguments)
+		if err != nil {
+			return pgconn.CommandTag{}, fmt.Errorf("rewrite query failed: %v", err)
+		}
 	}
 
 	// Always use simple protocol when there are no arguments.
@@ -548,8 +583,10 @@ const (
 	QueryExecModeCacheDescribe
 
 	// Get the statement description on every execution. This uses the extended protocol. Queries require two round trips
-	// to execute. It does not use prepared statements (allowing usage with most connection poolers) and is safe even
-	// when the the database schema is modified concurrently.
+	// to execute. It does not use named prepared statements. But it does use the unnamed prepared statement to get the
+	// statement description on the first round trip and then uses it to execute the query on the second round trip. This
+	// may cause problems with connection poolers that switch the underlying connection between round trips. It is safe
+	// even when the the database schema is modified concurrently.
 	QueryExecModeDescribeExec
 
 	// Assume the PostgreSQL query parameter types based on the Go type of the arguments. This uses the extended protocol
@@ -600,7 +637,7 @@ type QueryResultFormatsByOID map[uint32]int16
 
 // QueryRewriter rewrites a query when used as the first arguments to a query method.
 type QueryRewriter interface {
-	RewriteQuery(ctx context.Context, conn *Conn, sql string, args []any) (newSQL string, newArgs []any)
+	RewriteQuery(ctx context.Context, conn *Conn, sql string, args []any) (newSQL string, newArgs []any, err error)
 }
 
 // Query sends a query to the server and returns a Rows to read the results. Only errors encountered sending the query
@@ -610,6 +647,9 @@ type QueryRewriter interface {
 // The returned Rows must be closed before the connection can be used again. It is safe to attempt to read from the
 // returned Rows even if an error is returned. The error will be the available in rows.Err() after rows are closed. It
 // is allowed to ignore the error returned from Query and handle it in Rows.
+//
+// It is possible for a call of FieldDescriptions on the returned Rows to return nil even if the Query call did not
+// return an error.
 //
 // It is possible for a query to return one or more rows before encountering an error. In most cases the rows should be
 // collected before processing rather than processed while receiving each row. This avoids the possibility of the
@@ -659,7 +699,16 @@ optionLoop:
 	}
 
 	if queryRewriter != nil {
-		sql, args = queryRewriter.RewriteQuery(ctx, c, sql, args)
+		var err error
+		originalSQL := sql
+		originalArgs := args
+		sql, args, err = queryRewriter.RewriteQuery(ctx, c, sql, args)
+		if err != nil {
+			rows := c.getRows(ctx, originalSQL, originalArgs)
+			err = fmt.Errorf("rewrite query failed: %v", err)
+			rows.fatal(err)
+			return rows, err
+		}
 	}
 
 	// Bypass any statement caching.
@@ -675,43 +724,10 @@ optionLoop:
 	sd, explicitPreparedStatement := c.preparedStatements[sql]
 	if sd != nil || mode == QueryExecModeCacheStatement || mode == QueryExecModeCacheDescribe || mode == QueryExecModeDescribeExec {
 		if sd == nil {
-			switch mode {
-			case QueryExecModeCacheStatement:
-				if c.statementCache == nil {
-					err = errDisabledStatementCache
-					rows.fatal(err)
-					return rows, err
-				}
-				sd = c.statementCache.Get(sql)
-				if sd == nil {
-					sd, err = c.Prepare(ctx, stmtcache.NextStatementName(), sql)
-					if err != nil {
-						rows.fatal(err)
-						return rows, err
-					}
-					c.statementCache.Put(sd)
-				}
-			case QueryExecModeCacheDescribe:
-				if c.descriptionCache == nil {
-					err = errDisabledDescriptionCache
-					rows.fatal(err)
-					return rows, err
-				}
-				sd = c.descriptionCache.Get(sql)
-				if sd == nil {
-					sd, err = c.Prepare(ctx, "", sql)
-					if err != nil {
-						rows.fatal(err)
-						return rows, err
-					}
-					c.descriptionCache.Put(sd)
-				}
-			case QueryExecModeDescribeExec:
-				sd, err = c.Prepare(ctx, "", sql)
-				if err != nil {
-					rows.fatal(err)
-					return rows, err
-				}
+			sd, err = c.getStatementDescription(ctx, mode, sql)
+			if err != nil {
+				rows.fatal(err)
+				return rows, err
 			}
 		}
 
@@ -781,6 +797,48 @@ optionLoop:
 	return rows, rows.err
 }
 
+// getStatementDescription returns the statement description of the sql query
+// according to the given mode.
+//
+// If the mode is one that doesn't require to know the param and result OIDs
+// then nil is returned without error.
+func (c *Conn) getStatementDescription(
+	ctx context.Context,
+	mode QueryExecMode,
+	sql string,
+) (sd *pgconn.StatementDescription, err error) {
+
+	switch mode {
+	case QueryExecModeCacheStatement:
+		if c.statementCache == nil {
+			return nil, errDisabledStatementCache
+		}
+		sd = c.statementCache.Get(sql)
+		if sd == nil {
+			sd, err = c.Prepare(ctx, stmtcache.NextStatementName(), sql)
+			if err != nil {
+				return nil, err
+			}
+			c.statementCache.Put(sd)
+		}
+	case QueryExecModeCacheDescribe:
+		if c.descriptionCache == nil {
+			return nil, errDisabledDescriptionCache
+		}
+		sd = c.descriptionCache.Get(sql)
+		if sd == nil {
+			sd, err = c.Prepare(ctx, "", sql)
+			if err != nil {
+				return nil, err
+			}
+			c.descriptionCache.Put(sd)
+		}
+	case QueryExecModeDescribeExec:
+		return c.Prepare(ctx, "", sql)
+	}
+	return sd, err
+}
+
 // QueryRow is a convenience wrapper over Query. Any error that occurs while
 // querying is deferred until calling Scan on the returned Row. That Row will
 // error with ErrNoRows if no rows are returned.
@@ -826,7 +884,11 @@ func (c *Conn) SendBatch(ctx context.Context, b *Batch) (br BatchResults) {
 		}
 
 		if queryRewriter != nil {
-			sql, arguments = queryRewriter.RewriteQuery(ctx, c, sql, arguments)
+			var err error
+			sql, arguments, err = queryRewriter.RewriteQuery(ctx, c, sql, arguments)
+			if err != nil {
+				return &batchResults{ctx: ctx, conn: c, err: fmt.Errorf("rewrite query failed: %v", err)}
+			}
 		}
 
 		bi.query = sql
@@ -916,7 +978,7 @@ func (c *Conn) sendBatchQueryExecModeExec(ctx context.Context, b *Batch) *batchR
 
 func (c *Conn) sendBatchQueryExecModeCacheStatement(ctx context.Context, b *Batch) (pbr *pipelineBatchResults) {
 	if c.statementCache == nil {
-		return &pipelineBatchResults{ctx: ctx, conn: c, err: errDisabledStatementCache}
+		return &pipelineBatchResults{ctx: ctx, conn: c, err: errDisabledStatementCache, closed: true}
 	}
 
 	distinctNewQueries := []*pgconn.StatementDescription{}
@@ -948,7 +1010,7 @@ func (c *Conn) sendBatchQueryExecModeCacheStatement(ctx context.Context, b *Batc
 
 func (c *Conn) sendBatchQueryExecModeCacheDescribe(ctx context.Context, b *Batch) (pbr *pipelineBatchResults) {
 	if c.descriptionCache == nil {
-		return &pipelineBatchResults{ctx: ctx, conn: c, err: errDisabledDescriptionCache}
+		return &pipelineBatchResults{ctx: ctx, conn: c, err: errDisabledDescriptionCache, closed: true}
 	}
 
 	distinctNewQueries := []*pgconn.StatementDescription{}
@@ -1015,18 +1077,18 @@ func (c *Conn) sendBatchExtendedWithDescription(ctx context.Context, b *Batch, d
 
 		err := pipeline.Sync()
 		if err != nil {
-			return &pipelineBatchResults{ctx: ctx, conn: c, err: err}
+			return &pipelineBatchResults{ctx: ctx, conn: c, err: err, closed: true}
 		}
 
 		for _, sd := range distinctNewQueries {
 			results, err := pipeline.GetResults()
 			if err != nil {
-				return &pipelineBatchResults{ctx: ctx, conn: c, err: err}
+				return &pipelineBatchResults{ctx: ctx, conn: c, err: err, closed: true}
 			}
 
 			resultSD, ok := results.(*pgconn.StatementDescription)
 			if !ok {
-				return &pipelineBatchResults{ctx: ctx, conn: c, err: fmt.Errorf("expected statement description, got %T", results)}
+				return &pipelineBatchResults{ctx: ctx, conn: c, err: fmt.Errorf("expected statement description, got %T", results), closed: true}
 			}
 
 			// Fill in the previously empty / pending statement descriptions.
@@ -1036,12 +1098,12 @@ func (c *Conn) sendBatchExtendedWithDescription(ctx context.Context, b *Batch, d
 
 		results, err := pipeline.GetResults()
 		if err != nil {
-			return &pipelineBatchResults{ctx: ctx, conn: c, err: err}
+			return &pipelineBatchResults{ctx: ctx, conn: c, err: err, closed: true}
 		}
 
 		_, ok := results.(*pgconn.PipelineSync)
 		if !ok {
-			return &pipelineBatchResults{ctx: ctx, conn: c, err: fmt.Errorf("expected sync, got %T", results)}
+			return &pipelineBatchResults{ctx: ctx, conn: c, err: fmt.Errorf("expected sync, got %T", results), closed: true}
 		}
 	}
 
@@ -1056,7 +1118,9 @@ func (c *Conn) sendBatchExtendedWithDescription(ctx context.Context, b *Batch, d
 	for _, bi := range b.queuedQueries {
 		err := c.eqb.Build(c.typeMap, bi.sd, bi.arguments)
 		if err != nil {
-			return &pipelineBatchResults{ctx: ctx, conn: c, err: err}
+			// we wrap the error so we the user can understand which query failed inside the batch
+			err = fmt.Errorf("error building query %s: %w", bi.query, err)
+			return &pipelineBatchResults{ctx: ctx, conn: c, err: err, closed: true}
 		}
 
 		if bi.sd.Name == "" {
@@ -1068,7 +1132,7 @@ func (c *Conn) sendBatchExtendedWithDescription(ctx context.Context, b *Batch, d
 
 	err := pipeline.Sync()
 	if err != nil {
-		return &pipelineBatchResults{ctx: ctx, conn: c, err: err}
+		return &pipelineBatchResults{ctx: ctx, conn: c, err: err, closed: true}
 	}
 
 	return &pipelineBatchResults{
@@ -1110,8 +1174,9 @@ func (c *Conn) LoadType(ctx context.Context, typeName string) (*pgtype.Type, err
 	}
 
 	var typtype string
+	var typbasetype uint32
 
-	err = c.QueryRow(ctx, "select typtype::text from pg_type where oid=$1", oid).Scan(&typtype)
+	err = c.QueryRow(ctx, "select typtype::text, typbasetype from pg_type where oid=$1", oid).Scan(&typtype, &typbasetype)
 	if err != nil {
 		return nil, err
 	}
@@ -1136,8 +1201,39 @@ func (c *Conn) LoadType(ctx context.Context, typeName string) (*pgtype.Type, err
 		}
 
 		return &pgtype.Type{Name: typeName, OID: oid, Codec: &pgtype.CompositeCodec{Fields: fields}}, nil
+	case "d": // domain
+		dt, ok := c.TypeMap().TypeForOID(typbasetype)
+		if !ok {
+			return nil, errors.New("domain base type OID not registered")
+		}
+
+		return &pgtype.Type{Name: typeName, OID: oid, Codec: dt.Codec}, nil
 	case "e": // enum
 		return &pgtype.Type{Name: typeName, OID: oid, Codec: &pgtype.EnumCodec{}}, nil
+	case "r": // range
+		elementOID, err := c.getRangeElementOID(ctx, oid)
+		if err != nil {
+			return nil, err
+		}
+
+		dt, ok := c.TypeMap().TypeForOID(elementOID)
+		if !ok {
+			return nil, errors.New("range element OID not registered")
+		}
+
+		return &pgtype.Type{Name: typeName, OID: oid, Codec: &pgtype.RangeCodec{ElementType: dt}}, nil
+	case "m": // multirange
+		elementOID, err := c.getMultiRangeElementOID(ctx, oid)
+		if err != nil {
+			return nil, err
+		}
+
+		dt, ok := c.TypeMap().TypeForOID(elementOID)
+		if !ok {
+			return nil, errors.New("multirange element OID not registered")
+		}
+
+		return &pgtype.Type{Name: typeName, OID: oid, Codec: &pgtype.MultirangeCodec{ElementType: dt}}, nil
 	default:
 		return &pgtype.Type{}, errors.New("unknown typtype")
 	}
@@ -1147,6 +1243,28 @@ func (c *Conn) getArrayElementOID(ctx context.Context, oid uint32) (uint32, erro
 	var typelem uint32
 
 	err := c.QueryRow(ctx, "select typelem from pg_type where oid=$1", oid).Scan(&typelem)
+	if err != nil {
+		return 0, err
+	}
+
+	return typelem, nil
+}
+
+func (c *Conn) getRangeElementOID(ctx context.Context, oid uint32) (uint32, error) {
+	var typelem uint32
+
+	err := c.QueryRow(ctx, "select rngsubtype from pg_range where rngtypid=$1", oid).Scan(&typelem)
+	if err != nil {
+		return 0, err
+	}
+
+	return typelem, nil
+}
+
+func (c *Conn) getMultiRangeElementOID(ctx context.Context, oid uint32) (uint32, error) {
+	var typelem uint32
+
+	err := c.QueryRow(ctx, "select rngtypid from pg_range where rngmultitypid=$1", oid).Scan(&typelem)
 	if err != nil {
 		return 0, err
 	}
@@ -1168,6 +1286,8 @@ func (c *Conn) getCompositeFields(ctx context.Context, oid uint32) ([]pgtype.Com
 	rows, _ := c.Query(ctx, `select attname, atttypid
 from pg_attribute
 where attrelid=$1
+	and not attisdropped
+	and attnum > 0
 order by attnum`,
 		typrelid,
 	)
@@ -1209,6 +1329,7 @@ func (c *Conn) deallocateInvalidatedCachedStatements(ctx context.Context) error 
 
 	for _, sd := range invalidatedStatements {
 		pipeline.SendDeallocate(sd.Name)
+		delete(c.preparedStatements, sd.Name)
 	}
 
 	err := pipeline.Sync()

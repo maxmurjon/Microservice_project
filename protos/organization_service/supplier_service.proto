@@ -1,0 +1,17 @@
+syntax="proto3";
+
+package organization_service;
+option go_package="genproto/organization_service";
+
+import "supplier.proto";
+import "branch.proto";
+import "google/protobuf/empty.proto";
+
+service SupplierService {
+    rpc Create (CreateSupplierRequest) returns (Supplier);
+    rpc Get(PrimaryKey) returns (Supplier);
+    rpc GetList (GetListSupplierRequest) returns (GetSuppliersListResponse);
+    rpc Update (UpdateSupplierRequest) returns (Supplier);
+    rpc PatchUpdate (PatchUpdateRequest) returns (Supplier);
+    rpc Delete (PrimaryKey) returns (google.protobuf.Empty);
+}

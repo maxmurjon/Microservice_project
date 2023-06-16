@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"net"
 	"net/url"
@@ -64,7 +63,7 @@ type Config struct {
 	createdByParseConfig bool // Used to enforce created by ParseConfig rule.
 }
 
-// ParseConfigOptions contains options that control how a config is built such as getsslpassword.
+// ParseConfigOptions contains options that control how a config is built such as GetSSLPassword.
 type ParseConfigOptions struct {
 	// GetSSLPassword gets the password to decrypt a SSL client certificate. This is analogous to the the libpq function
 	// PQsetSSLKeyPassHook_OpenSSL.
@@ -211,9 +210,9 @@ func NetworkAddress(host string, port uint16) (network, address string) {
 //
 // In addition, ParseConfig accepts the following options:
 //
-//	servicefile
-//		libpq only reads servicefile from the PGSERVICEFILE environment variable. ParseConfig accepts servicefile as a
-//		part of the connection string.
+//   - servicefile.
+//     libpq only reads servicefile from the PGSERVICEFILE environment variable. ParseConfig accepts servicefile as a
+//     part of the connection string.
 func ParseConfig(connString string) (*Config, error) {
 	var parseConfigOptions ParseConfigOptions
 	return ParseConfigWithOptions(connString, parseConfigOptions)
@@ -687,7 +686,7 @@ func configTLS(settings map[string]string, thisHost string, parseConfigOptions P
 		caCertPool := x509.NewCertPool()
 
 		caPath := sslrootcert
-		caCert, err := ioutil.ReadFile(caPath)
+		caCert, err := os.ReadFile(caPath)
 		if err != nil {
 			return nil, fmt.Errorf("unable to read CA file: %w", err)
 		}
@@ -705,7 +704,7 @@ func configTLS(settings map[string]string, thisHost string, parseConfigOptions P
 	}
 
 	if sslcert != "" && sslkey != "" {
-		buf, err := ioutil.ReadFile(sslkey)
+		buf, err := os.ReadFile(sslkey)
 		if err != nil {
 			return nil, fmt.Errorf("unable to read sslkey: %w", err)
 		}
@@ -744,7 +743,7 @@ func configTLS(settings map[string]string, thisHost string, parseConfigOptions P
 		} else {
 			pemKey = pem.EncodeToMemory(block)
 		}
-		certfile, err := ioutil.ReadFile(sslcert)
+		certfile, err := os.ReadFile(sslcert)
 		if err != nil {
 			return nil, fmt.Errorf("unable to read cert: %w", err)
 		}

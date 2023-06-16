@@ -1,0 +1,3 @@
+[submodule "marketProtos"]
+	path = marketProtos
+	url = git@github.com:maxmurjon/marketProtos.git

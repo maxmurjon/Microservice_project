@@ -1,0 +1,31 @@
+syntax="proto3";
+
+package organization_service;
+option go_package="genproto/organization_service";
+
+// import "google/protobuf/struct.proto";
+
+message Balance{
+    string id=1;
+    string BalanceId=2;
+    string quantity=3;
+}
+
+message CreateBalanceRequest{
+    string BalanceId=1;
+    string quantity=2;
+}
+
+message GetListBalanceRequest{
+    string limit=1;
+}
+
+message GetBalancesListResponse {
+    repeated Balance balances = 1;
+    int32 count = 2;
+}
+
+message UpdateBalanceRequest {
+    Balance balance = 1;
+}
+

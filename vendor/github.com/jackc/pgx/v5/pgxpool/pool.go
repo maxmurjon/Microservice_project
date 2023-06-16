@@ -22,10 +22,11 @@ var defaultMaxConnIdleTime = time.Minute * 30
 var defaultHealthCheckPeriod = time.Minute
 
 type connResource struct {
-	conn      *pgx.Conn
-	conns     []Conn
-	poolRows  []poolRow
-	poolRowss []poolRows
+	conn       *pgx.Conn
+	conns      []Conn
+	poolRows   []poolRow
+	poolRowss  []poolRows
+	maxAgeTime time.Time
 }
 
 func (cr *connResource) getConn(p *Pool, res *puddle.Resource[*connResource]) *Conn {
@@ -84,6 +85,7 @@ type Pool struct {
 	afterConnect          func(context.Context, *pgx.Conn) error
 	beforeAcquire         func(context.Context, *pgx.Conn) bool
 	afterRelease          func(*pgx.Conn) bool
+	beforeClose           func(*pgx.Conn)
 	minConns              int32
 	maxConns              int32
 	maxConnLifetime       time.Duration
@@ -110,13 +112,16 @@ type Config struct {
 	AfterConnect func(context.Context, *pgx.Conn) error
 
 	// BeforeAcquire is called before a connection is acquired from the pool. It must return true to allow the
-	// acquision or false to indicate that the connection should be destroyed and a different connection should be
+	// acquisition or false to indicate that the connection should be destroyed and a different connection should be
 	// acquired.
 	BeforeAcquire func(context.Context, *pgx.Conn) bool
 
 	// AfterRelease is called after a connection is released, but before it is returned to the pool. It must return true to
 	// return the connection to the pool or false to destroy the connection.
 	AfterRelease func(*pgx.Conn) bool
+
+	// BeforeClose is called right before a connection is closed and removed from the pool.
+	BeforeClose func(*pgx.Conn)
 
 	// MaxConnLifetime is the duration since creation after which a connection will be automatically closed.
 	MaxConnLifetime time.Duration
@@ -179,6 +184,7 @@ func NewWithConfig(ctx context.Context, config *Config) (*Pool, error) {
 		afterConnect:          config.AfterConnect,
 		beforeAcquire:         config.BeforeAcquire,
 		afterRelease:          config.AfterRelease,
+		beforeClose:           config.BeforeClose,
 		minConns:              config.MinConns,
 		maxConns:              config.MaxConns,
 		maxConnLifetime:       config.MaxConnLifetime,
@@ -219,11 +225,15 @@ func NewWithConfig(ctx context.Context, config *Config) (*Pool, error) {
 					}
 				}
 
+				jitterSecs := rand.Float64() * config.MaxConnLifetimeJitter.Seconds()
+				maxAgeTime := time.Now().Add(config.MaxConnLifetime).Add(time.Duration(jitterSecs) * time.Second)
+
 				cr := &connResource{
-					conn:      conn,
-					conns:     make([]Conn, 64),
-					poolRows:  make([]poolRow, 64),
-					poolRowss: make([]poolRows, 64),
+					conn:       conn,
+					conns:      make([]Conn, 64),
+					poolRows:   make([]poolRow, 64),
+					poolRowss:  make([]poolRows, 64),
+					maxAgeTime: maxAgeTime,
 				}
 
 				return cr, nil
@@ -231,6 +241,9 @@ func NewWithConfig(ctx context.Context, config *Config) (*Pool, error) {
 			Destructor: func(value *connResource) {
 				ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 				conn := value.conn
+				if p.beforeClose != nil {
+					p.beforeClose(conn)
+				}
 				conn.Close(ctx)
 				select {
 				case <-conn.PgConn().CleanupDone():
@@ -256,12 +269,12 @@ func NewWithConfig(ctx context.Context, config *Config) (*Pool, error) {
 // ParseConfig builds a Config from connString. It parses connString with the same behavior as pgx.ParseConfig with the
 // addition of the following variables:
 //
-// pool_max_conns: integer greater than 0
-// pool_min_conns: integer 0 or greater
-// pool_max_conn_lifetime: duration string
-// pool_max_conn_idle_time: duration string
-// pool_health_check_period: duration string
-// pool_max_conn_lifetime_jitter: duration string
+//   - pool_max_conns: integer greater than 0
+//   - pool_min_conns: integer 0 or greater
+//   - pool_max_conn_lifetime: duration string
+//   - pool_max_conn_idle_time: duration string
+//   - pool_health_check_period: duration string
+//   - pool_max_conn_lifetime_jitter: duration string
 //
 // See Config for definitions of these arguments.
 //
@@ -364,17 +377,7 @@ func (p *Pool) Close() {
 }
 
 func (p *Pool) isExpired(res *puddle.Resource[*connResource]) bool {
-	now := time.Now()
-	// Small optimization to avoid rand. If it's over lifetime AND jitter, immediately
-	// return true.
-	if now.Sub(res.CreationTime()) > p.maxConnLifetime+p.maxConnLifetimeJitter {
-		return true
-	}
-	if p.maxConnLifetimeJitter == 0 {
-		return false
-	}
-	jitterSecs := rand.Float64() * p.maxConnLifetimeJitter.Seconds()
-	return now.Sub(res.CreationTime()) > p.maxConnLifetime+(time.Duration(jitterSecs)*time.Second)
+	return time.Now().After(res.Value().maxAgeTime)
 }
 
 func (p *Pool) triggerHealthCheck() {
@@ -501,7 +504,7 @@ func (p *Pool) Acquire(ctx context.Context) (*Conn, error) {
 		cr := res.Value()
 
 		if res.IdleDuration() > time.Second {
-			err := cr.conn.PgConn().CheckConn()
+			err := cr.conn.Ping(ctx)
 			if err != nil {
 				res.Destroy()
 				continue

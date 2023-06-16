@@ -1,0 +1,38 @@
+syntax="proto3";
+
+package organization_service;
+option go_package="genproto/organization_service";
+
+
+message Supplier{
+    string id=1;
+    string firstName=2;
+    string lastName=3;
+    string storeId=4;
+    string phoneNumber=5;
+    string active=6;
+}
+
+message CreateSupplierRequest{
+    string firstName=1;
+    string lastName=2;
+    string storeId=3;
+    string phoneNumber=4;
+    string active=5;
+}
+
+message GetListSupplierRequest{
+    string firstName=1;
+    string lastName=2;
+}
+
+message GetSuppliersListResponse {
+    repeated Supplier suppliers = 1;
+    int32 count = 2;
+}
+
+message UpdateSupplierRequest {
+    Supplier supplier = 1;
+}
+
+
