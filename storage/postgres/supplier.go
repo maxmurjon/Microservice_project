@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 	"organization_service/genproto/organization_service"
 	"organization_service/storage"
 
@@ -26,7 +27,7 @@ func (b *supplierRepo) Create(ctx context.Context, req *organization_service.Cre
 				id, 
 				first_name,
 				last_name, 
-				store,
+				store_id,
 				phone_number,
 				active
 				) VALUES (
@@ -34,7 +35,8 @@ func (b *supplierRepo) Create(ctx context.Context, req *organization_service.Cre
 					$2, 
 					$3,
 					$4,
-					$5
+					$5,
+					$6
 				)`
 
 	uuid, err := uuid.NewRandom()
@@ -50,8 +52,8 @@ func (b *supplierRepo) Create(ctx context.Context, req *organization_service.Cre
 		req.PhoneNumber,
 		req.Active,
 	)
-
 	if err != nil {
+		fmt.Println("hello")
 		return resp, err
 	}
 
@@ -72,7 +74,7 @@ func (b *supplierRepo) Get(ctx context.Context, req *organization_service.Primar
 		store_id,
 		phone_number,
 		active
-	FROM branch 
+	FROM supplier 
 	WHERE id = $1`
 
 	err = b.db.QueryRow(ctx, query, req.Id).Scan(
@@ -91,91 +93,70 @@ func (b *supplierRepo) Get(ctx context.Context, req *organization_service.Primar
 }
 
 func (b *supplierRepo) GetList(ctx context.Context, req *organization_service.GetListSupplierRequest) (resp *organization_service.GetSuppliersListResponse, err error) {
-	// resp = &organization_service.GetBranchsListResponse{}
-	// var (
-	// 	params      (map[string]interface{})
-	// 	filter      string
-	// 	order       string
-	// 	arrangement string
-	// 	offset      string
-	// 	limit       string
-	// 	q           string
-	// )
+	resp = &organization_service.GetSuppliersListResponse{}
+	var (
+		params      (map[string]interface{})
+		filter      string
+		order       string
+		arrangement string
+		offset      string
+		limit       string
+		q           string
+	)
+	params = map[string]interface{}{}
 
-	// params = map[string]interface{}{}
+	query := `SELECT 
+				id, 
+				first_name, 
+				last_name,
+				store_id,
+				phone_number,
+				active
+			FROM supplier `
+	filter = " WHERE true"
 
-	// query := `select
-	// 			id,
-	// 			name,
-	// 			number_of_pages,
-	// 			created_at,
-	// 			updated_at
-	// 		from books`
-	// filter = " WHERE true"
-	// order = " ORDER BY created_at"
-	// arrangement = " DESC"
-	// offset = " OFFSET 0"
-	// limit = " LIMIT 10"
+	if len(req.GetFirstName()) > 0 {
+		filter += " AND first_name ILIKE '%' || '" + req.GetFirstName() + "' || '%' "
+	}
 
-	// if req.Page > 0 {
-	// 	req.Page = (req.Page - 1) * req.Limit
-	// 	params["offset"] = req.Page
-	// 	offset = " OFFSET @offset"
-	// }
+	if len(req.GetLastName()) > 0 {
+		filter += " AND last_name ILIKE '%' || '" + req.GetLastName() + "' || '%' "
+	}
 
-	// if req.Limit > 0 {
-	// 	params["limit"] = req.Limit
-	// 	limit = " LIMIT @limit"
-	// }
+	cQ := `SELECT count(1) FROM supplier` + filter
 
-	// cQ := `SELECT count(1) FROM books` + filter
+	err = b.db.QueryRow(ctx, cQ, pgx.NamedArgs(params)).Scan(
+		&resp.Count,
+	)
+	if err != nil {
+		return resp, err
+	}
 
-	// err = b.db.QueryRow(ctx, cQ, pgx.NamedArgs(params)).Scan(
-	// 	&resp.Count,
-	// )
+	q = query + filter + order + arrangement + offset + limit
 
-	// if err != nil {
-	// 	return resp, err
-	// }
+	rows, err := b.db.Query(ctx, q, pgx.NamedArgs(params))
+	if err != nil {
+		return resp, err
+	}
+	defer rows.Close()
 
-	// q = query + filter + order + arrangement + offset + limit
+	for rows.Next() {
+		result := &organization_service.Supplier{}
 
-	// rows, err := b.db.Query(ctx, q, pgx.NamedArgs(params))
-	// if err != nil {
-	// 	return resp, err
-	// }
-	// defer rows.Close()
+		err = rows.Scan(
+			&result.Id,
+			&result.FirstName,
+			&result.LastName,
+			&result.StoreId,
+			&result.PhoneNumber,
+			&result.Active,
+		)
+		if err != nil {
+			return resp, err
+		}
 
-	// for rows.Next() {
-	// 	book := &book_service.Book{}
-	// 	result := &Book{}
-
-	// 	err = rows.Scan(
-	// 		&result.Id,
-	// 		&result.Name,
-	// 		&result.NumberOfPages,
-	// 		&result.CreatedAt,
-	// 		&result.UpdatedAt,
-	// 	)
-
-	// 	if err != nil {
-	// 		return resp, err
-	// 	}
-
-	// 	if result.CreatedAt.Valid {
-	// 		book.CreatedAt = result.CreatedAt.String
-	// 	}
-
-	// 	if result.UpdatedAt.Valid {
-	// 		book.UpdatedAt = result.UpdatedAt.String
-	// 	}
-
-	// 	book.Id = result.Id
-	// 	book.Name = result.Name
-	// 	book.NumberOfPages = result.NumberOfPages
-
-	// 	resp.Books = append(resp.Books, book)
-	// }
+		resp.Suppliers = append(resp.Suppliers, result)
+	}
 
 	return
 }
@@ -184,17 +165,19 @@ func (b *supplierRepo) Update(ctx context.Context, req *organization_service.Upd
 	query := `UPDATE supplier SET
 		first_name = @first_name,
 		last_name = @last_name,
-		store = @store,
-		phone_number = @phone_number
+		store_id = @store_id,
+		phone_number = @phone_number,
+		active=@active
 	WHERE
 		id = @id`
 
 	params := map[string]interface{}{
 		"id":           req.Supplier.Id,
-		"first_name":  req.Supplier.FirstName,
-		"last_name":         req.Supplier.LastName,
-		"phone_number":      req.Supplier.PhoneNumber,
-		"active": req.Supplier.Active,
+		"first_name":   req.Supplier.FirstName,
+		"last_name":    req.Supplier.LastName,
+		"phone_number": req.Supplier.PhoneNumber,
+		"store_id":     req.Supplier.StoreId,
+		"active":       req.Supplier.Active,
 	}
 
 	result, err := b.db.Exec(ctx, query, pgx.NamedArgs(params))
@@ -217,7 +200,7 @@ func (b *supplierRepo) PatchUpdate(ctx context.Context, req *organization_servic
 	}
 	query := `
 		UPDATE 
-			employees 
+			supplier 
 		SET` + columns + `
 	WHERE 
 		id = @id`
@@ -235,7 +218,7 @@ func (b *supplierRepo) PatchUpdate(ctx context.Context, req *organization_servic
 }
 
 func (b *supplierRepo) Delete(ctx context.Context, req *organization_service.PrimaryKey) (rowsAffected int, err error) {
-	query := `DELETE FROM branch where id = $1`
+	query := `DELETE FROM supplier where id = $1`
 
 	result, err := b.db.Exec(ctx, query, req.Id)
 	if err != nil {

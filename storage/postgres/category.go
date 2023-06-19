@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 	"organization_service/genproto/organization_service"
 	"organization_service/storage"
 
@@ -33,6 +34,7 @@ func (b *categoryRepo) Create(ctx context.Context, req *organization_service.Cre
 				)`
 
 	uuid, err := uuid.NewRandom()
+	fmt.Println(uuid)
 	if err != nil {
 		return resp, err
 	}
@@ -42,7 +44,6 @@ func (b *categoryRepo) Create(ctx context.Context, req *organization_service.Cre
 		req.Name,
 		req.Category,
 	)
-
 	if err != nil {
 		return resp, err
 	}

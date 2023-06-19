@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 	"organization_service/genproto/organization_service"
 	"organization_service/storage"
 
@@ -28,6 +29,7 @@ func (b *productRepo) Create(ctx context.Context, req *organization_service.Crea
 				name, 
 				category_id,
 				barcode,
+				branch_id,
 				price
 				) VALUES (
 					$1, 
@@ -35,7 +37,8 @@ func (b *productRepo) Create(ctx context.Context, req *organization_service.Crea
 					$3,
 					$4,
 					$5,
-					$6
+					$6,
+					$7
 				)`
 
 	uuid, err := uuid.NewRandom()
@@ -49,10 +52,12 @@ func (b *productRepo) Create(ctx context.Context, req *organization_service.Crea
 		req.Name,
 		req.CategoryId,
 		req.Barcode,
+		req.BranchId,
 		req.Price,
 	)
 
 	if err != nil {
+		fmt.Println("hello")
 		return resp, err
 	}
 
@@ -72,6 +77,7 @@ func (b *productRepo) Get(ctx context.Context, req *organization_service.Primary
 				name, 
 				category_id,
 				barcode,
+				branch_id,
 				price
 			FROM product 
 			WHERE id = $1`
@@ -82,6 +88,7 @@ func (b *productRepo) Get(ctx context.Context, req *organization_service.Primary
 		&resp.Name,
 		&resp.CategoryId,
 		&resp.Barcode,
+		&resp.BranchId,
 		&resp.Price,
 	)
 	if err != nil {
@@ -92,94 +99,76 @@ func (b *productRepo) Get(ctx context.Context, req *organization_service.Primary
 }
 
 func (b *productRepo) GetList(ctx context.Context, req *organization_service.GetListProductRequest) (resp *organization_service.GetProductsListResponse, err error) {
-	// resp = &organization_service.GetBranchsListResponse{}
-	// var (
-	// 	params      (map[string]interface{})
-	// 	filter      string
-	// 	order       string
-	// 	arrangement string
-	// 	offset      string
-	// 	limit       string
-	// 	q           string
-	// )
+	resp = &organization_service.GetProductsListResponse{}
+	var (
+		params      (map[string]interface{})
+		filter      string
+		order       string
+		arrangement string
+		offset      string
+		limit       string
+		q           string
+	)
+	params = map[string]interface{}{}
 
-	// params = map[string]interface{}{}
+	query := `SELECT 
+				id, 
+				photo,
+				name, 
+				category_id,
+				branch_id,
+				barcode,
+				price
+			FROM product `
+	filter = " WHERE true"
 
-	// query := `select
-	// 			id,
-	// 			name,
-	// 			number_of_pages,
-	// 			created_at,
-	// 			updated_at
-	// 		from books`
-	// filter = " WHERE true"
-	// order = " ORDER BY created_at"
-	// arrangement = " DESC"
-	// offset = " OFFSET 0"
-	// limit = " LIMIT 10"
+	if len(req.GetName()) > 0 {
+		filter += " AND name ILIKE '%' || '" + req.GetName() + "' || '%' "
+	}
 
-	// if req.Page > 0 {
-	// 	req.Page = (req.Page - 1) * req.Limit
-	// 	params["offset"] = req.Page
-	// 	offset = " OFFSET @offset"
-	// }
+	if len(req.GetBarcode()) > 0 {
+		filter += " AND barcode ILIKE '%' || '" + req.GetBarcode() + "' || '%' "
+	}
 
-	// if req.Limit > 0 {
-	// 	params["limit"] = req.Limit
-	// 	limit = " LIMIT @limit"
-	// }
+	cQ := `SELECT count(1) FROM product` + filter
 
-	// cQ := `SELECT count(1) FROM books` + filter
+	err = b.db.QueryRow(ctx, cQ, pgx.NamedArgs(params)).Scan(
+		&resp.Count,
+	)
+	if err != nil {
+		return resp, err
+	}
 
-	// err = b.db.QueryRow(ctx, cQ, pgx.NamedArgs(params)).Scan(
-	// 	&resp.Count,
-	// )
+	q = query + filter + order + arrangement + offset + limit
 
-	// if err != nil {
-	// 	return resp, err
-	// }
+	rows, err := b.db.Query(ctx, q, pgx.NamedArgs(params))
+	if err != nil {
+		return resp, err
+	}
+	defer rows.Close()
 
-	// q = query + filter + order + arrangement + offset + limit
+	for rows.Next() {
+		result := &organization_service.Product{}
 
-	// rows, err := b.db.Query(ctx, q, pgx.NamedArgs(params))
-	// if err != nil {
-	// 	return resp, err
-	// }
-	// defer rows.Close()
+		err = rows.Scan(
+			&result.Id,
+			&result.Photo,
+			&result.Name,
+			&result.CategoryId,
+			&result.BranchId,
+			&result.Barcode,
+			&result.Price,
+		)
+		if err != nil {
+			return resp, err
+		}
 
-	// for rows.Next() {
-	// 	book := &book_service.Book{}
-	// 	result := &Book{}
-
-	// 	err = rows.Scan(UpdateSupplierRequest
-	// 		&result.Id,
-	// 		&result.Name,
-	// 		&result.NumberOfPages,
-	// 		&result.CreatedAt,
-	// 		&result.UpdatedAt,
-	// 	)
-
-	// 	if err != nil {
-	// 		return resp, err
-	// 	}
-
-	// 	if result.CreatedAt.Valid {
-	// 		book.CreatedAt = result.CreatedAt.String
-	// 	}
-
-	// 	if result.UpdatedAt.Valid {
-	// 		book.UpdatedAt = result.UpdatedAt.String
-	// 	}
-
-	// 	book.Id = result.Id
-	// 	book.Name = result.Name
-	// 	book.NumberOfPages = result.NumberOfPages
-
-	// 	resp.Books = append(resp.Books, book)
-	// }
+		resp.Products = append(resp.Products, result)
+	}
 
 	return
 }
+
 
 func (b *productRepo) Update(ctx context.Context, req *organization_service.UpdateProductRequest) (rowsAffected int, err error) {
 	query := `UPDATE product SET
@@ -187,17 +176,19 @@ func (b *productRepo) Update(ctx context.Context, req *organization_service.Upda
 		name = @name,
 		category_id = @category_id,
 		barcode = @barcode,
+		branch_id=@branch_id,
 		price=@price
 	WHERE
 		id = @id`
 
 	params := map[string]interface{}{
-		"id":           req.Product.Id,
-		"photo":  req.Product.Photo,
-		"name":         req.Product.Name,
-		"category_id":      req.Product.CategoryId,
-		"barcode": req.Product.Barcode,
-		"price": req.Product.Price,
+		"id":          req.Product.Id,
+		"photo":       req.Product.Photo,
+		"name":        req.Product.Name,
+		"category_id": req.Product.CategoryId,
+		"barcode":     req.Product.Barcode,
+		"branch_id":   req.Product.BranchId,
+		"price":       req.Product.Price,
 	}
 
 	result, err := b.db.Exec(ctx, query, pgx.NamedArgs(params))

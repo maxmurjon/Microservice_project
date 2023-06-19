@@ -29,6 +29,7 @@ message CreateEmployeesRequest{
 message GetEmployeesListRequest{
     string firstName=1;
     string lastName=2;
+    string phoneNumber=3;
 }
 
 message GetEmployeessListResponse {

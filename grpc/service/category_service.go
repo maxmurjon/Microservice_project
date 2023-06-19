@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type categoryService struct { 
+type categoryService struct {
 	cfg  config.Config
 	log  logger.LoggerI
 	strg storage.StorageI
@@ -39,7 +39,6 @@ func (b *categoryService) Create(ctx context.Context, req *organization_service.
 		b.log.Error("!!!CreateCategory--->", logger.Error(err))
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-
 	return b.strg.Category().Get(ctx, pKey)
 }
 

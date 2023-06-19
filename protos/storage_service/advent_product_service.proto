@@ -1,0 +1,17 @@
+syntax="proto3";
+
+package storage_service;
+option go_package="genproto/storage_service";
+
+import "advent_product.proto";
+import "advent.proto";
+import "google/protobuf/empty.proto";
+
+service AdventProductService {
+    rpc Create (CreateAdventProductRequest) returns (AdventProduct);
+    rpc Get (PrimaryKey) returns (AdventProduct);
+    rpc GetList (GetListAdventProductRequest) returns (GetAdventProductsListResponse);
+    rpc Update (UpdateAdventProductRequest) returns (AdventProduct);
+    rpc PatchUpdate (PatchUpdateRequest) returns (AdventProduct);
+    rpc Delete (PrimaryKey) returns (google.protobuf.Empty);
+}

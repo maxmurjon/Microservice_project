@@ -1,0 +1,17 @@
+syntax="proto3";
+
+package sale_service;
+option go_package="genproto/sale_service";
+
+import "payment.proto";
+import "sale_product.proto";
+import "google/protobuf/empty.proto";
+
+service PaymentService {
+    rpc Create (CreatePaymentRequest) returns (Payment);
+    rpc Get (PrimaryKey) returns (Payment);
+    rpc GetList (GetListPaymentRequest) returns (GetPaymentsListResponse);
+    rpc Update (UpdatePaymentRequest) returns (Payment);
+    rpc PatchUpdate (PatchUpdateRequest) returns (Payment);
+    rpc Delete (PrimaryKey) returns (google.protobuf.Empty);
+}

@@ -1,0 +1,17 @@
+syntax="proto3";
+
+package storage_service;
+option go_package="genproto/storage_service";
+
+import "balance.proto";
+import "advent.proto";
+import "google/protobuf/empty.proto";
+
+service BalanceService {
+    rpc Create (CreateBalanceRequest) returns (Balance);
+    rpc Get (PrimaryKey) returns (Balance);
+    rpc GetList (GetListBalanceRequest) returns (GetBalancesListResponse);
+    rpc Update (UpdateBalanceRequest) returns (Balance);
+    rpc PatchUpdate (PatchUpdateRequest) returns (Balance);
+    rpc Delete (PrimaryKey) returns (google.protobuf.Empty);
+}

@@ -1,0 +1,37 @@
+syntax="proto3";
+
+package sale_service;
+option go_package="genproto/sale_service";
+
+message Change{
+    string id=1;
+    string branchId=2;
+    string employeesId=3;
+    string saleId=4;
+    string storeId=5;
+    string status=6;
+    string transactionId=7;
+}
+
+message CreateChangeRequest{
+    string branchId=2;
+    string employeesId=3;
+    string saleId=4;
+    string storeId=5;
+    string status=6;
+    string transactionId=7;
+}
+
+message GetListChangeRequest{
+    string name=1;
+}
+
+message GetChangesListResponse {
+    repeated Change change = 1;
+    int32 count = 2;
+}
+
+message UpdateChangeRequest {
+    Change change = 1;
+}
+

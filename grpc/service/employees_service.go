@@ -55,18 +55,18 @@ func (b *employeesService) Get(ctx context.Context, req *organization_service.Pr
 	return resp, err
 }
 
-// func (b *employeesService) GetBooksList(ctx context.Context, req *book_service.GetBooksListRequest) (resp *book_service.GetBooksListResponse, err error) {
-// 	b.log.Info("---GetBooksList--->", logger.Any("req", req))
+func (b *employeesService) GetList(ctx context.Context, req *organization_service.GetEmployeesListRequest) (resp *organization_service.GetEmployeessListResponse, err error) {
+	b.log.Info("---GetEmployeessList--->", logger.Any("req", req))
 
-// 	resp, err = b.strg.Book().GetList(ctx, req)
+	resp, err = b.strg.Employees().GetList(ctx, req)
 
-// 	if err != nil {
-// 		b.log.Error("!!!GetBooksList--->", logger.Error(err))
-// 		return nil, status.Error(codes.InvalidArgument, err.Error())
-// 	}
+	if err != nil {
+		b.log.Error("!!!GetEmployeessList--->", logger.Error(err))
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
 
-// 	return resp, err
-// }
+	return resp, err
+}
 
 func (b *employeesService) Update(ctx context.Context, req *organization_service.UpdateEmployeesRequest) (resp *organization_service.Employees, err error) {
 	b.log.Info("---UpdateEmployees--->", logger.Any("req", req))

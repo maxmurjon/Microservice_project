@@ -1,19 +1,19 @@
 syntax="proto3";
 
-package organization_service;
-option go_package="genproto/organization_service";
+package storage_service;
+option go_package="genproto/storage_service";
 
 // import "google/protobuf/struct.proto";
 
 message Balance{
     string id=1;
-    string BalanceId=2;
-    string quantity=3;
+    string productId=2;
+    int64 quantity=3;
 }
 
 message CreateBalanceRequest{
-    string BalanceId=1;
-    string quantity=2;
+    string productId=1;
+    int64 quantity=2;
 }
 
 message GetListBalanceRequest{

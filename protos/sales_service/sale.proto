@@ -1,0 +1,65 @@
+syntax="proto3";
+
+package sale_service;
+option go_package="genproto/sale_service";
+
+import "sale_product.proto";
+
+message Sale{
+    string id=1;
+    string barcodeCheck=2;
+    string saleId=3;
+    string branchId=4;
+    string storeId=5;
+    string employeesId=6;
+    string status=7;
+    repeated string saleProductId=8;
+    string payment=9;
+}
+
+message GetSale{
+    string id=1;
+    string barcodeCheck=2;
+    string saleId=3;
+    string branchId=4;
+    string storeId=5;
+    string employeesId=6;
+    string status=7;
+    repeated SaleProduct AdventProducts=8;
+    string payment=9;
+}
+
+message CreateSaleRequest{
+    string barcodeCheck=1;
+    string saleId=2;
+    string branchId=3;
+    string storeId=4;
+    string employeesId=5;
+    string status=6;
+    repeated CreateSaleProductRequest saleProductId=7;
+    string payment=8;
+}
+
+message CreateSaleRequesst{
+    string barcodeCheck=1;
+    string saleId=2;
+    string branchId=3;
+    string storeId=4;
+    string employeesId=5;
+    string status=6;
+    repeated string saleProductId=7;
+    string payment=8;
+}
+
+message GetListSaleRequest{
+    string name=1;
+}
+
+message GetSalesListResponse {
+    repeated Sale sale = 1;
+    int32 count = 2;
+}
+
+message UpdateSaleRequest {
+    Sale sale = 1;
+}

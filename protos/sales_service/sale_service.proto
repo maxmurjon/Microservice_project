@@ -1,0 +1,17 @@
+syntax="proto3";
+
+package sale_service;
+option go_package="genproto/sale_service";
+
+import "sale.proto";
+import "sale_product.proto";
+import "google/protobuf/empty.proto";
+
+service SaleService {
+    rpc Create (CreateSaleRequest) returns (Sale);
+    rpc Get (PrimaryKey) returns (Sale);
+    rpc GetList (GetListSaleRequest) returns (GetSalesListResponse);
+    rpc Update (UpdateSaleRequest) returns (Sale);
+    rpc PatchUpdate (PatchUpdateRequest) returns (Sale);
+    rpc Delete (PrimaryKey) returns (google.protobuf.Empty);
+}

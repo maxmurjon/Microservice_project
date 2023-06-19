@@ -1,0 +1,39 @@
+syntax="proto3";
+
+package sale_service;
+option go_package="genproto/sale_service";
+
+message Payment{
+    string id=1;
+    string cash=2;
+    string uzcard=3;
+    string payme=4;
+    string click=5;
+    string humo=6;
+    string apelsin=7;
+    string totalAmount=8;
+}
+
+message CreatePaymentRequest{
+    string cash=2;
+    string uzcard=3;
+    string payme=4;
+    string click=5;
+    string humo=6;
+    string apelsin=7;
+    string totalAmount=8;
+}
+
+message GetListPaymentRequest{
+    string name=1;
+}
+
+message GetPaymentsListResponse {
+    repeated Payment payment = 1;
+    int32 count = 2;
+}
+
+message UpdatePaymentRequest {
+    Payment payment = 1;
+}
+

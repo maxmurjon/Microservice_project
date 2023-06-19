@@ -1,0 +1,63 @@
+syntax="proto3";
+
+package sale_service;
+option go_package="genproto/sale_service";
+
+// import "google/protobuf/struct.proto";
+
+message PrimaryKey {
+    string id = 1;
+}
+
+
+message SaleProduct{
+    string id=1;
+    string photo=2;
+    string name=3;
+    string category_id=4;
+    string branch_id=5;
+    string barcode=6;
+    string discount=7;
+    string discount_name=8;
+    string balance_id=9;
+    float price=10;
+    string status=11;
+}
+
+message CreateSaleProductRequest{
+    string photo=2;
+    string name=3;
+    string category_id=4;
+    string branch_id=5;
+    string barcode=6;
+    string discount=7;
+    string discount_name=8;
+    string balance_id=9;
+    float price=10;
+    string status=11;
+}
+
+message GetListSaleProductRequest{
+    string name=1;
+}
+
+message GetSaleProductsListResponse {
+    repeated SaleProduct saleProduct = 1;
+    int32 count = 2;
+}
+
+message UpdateSaleProductRequest {
+    SaleProduct saleProduct = 1;
+}
+
+message Obj {
+    string key = 1;
+    string value = 2;
+}
+
+// google.protobuf.Struct value = 2;
+
+message PatchUpdateRequest {
+    string id = 1;
+    repeated Obj params = 2;
+}

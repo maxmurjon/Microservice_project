@@ -55,18 +55,18 @@ func (b *supplierService) Get(ctx context.Context, req *organization_service.Pri
 	return resp, err
 }
 
-// func (b *supplierService) GetBooksList(ctx context.Context, req *book_service.GetBooksListRequest) (resp *book_service.GetBooksListResponse, err error) {
-// 	b.log.Info("---GetBooksList--->", logger.Any("req", req))
+func (b *supplierService) GetList(ctx context.Context, req *organization_service.GetListSupplierRequest) (resp *organization_service.GetSuppliersListResponse, err error) {
+	b.log.Info("---GetSuppliersList--->", logger.Any("req", req))
 
-// 	resp, err = b.strg.Book().GetList(ctx, req)
+	resp, err = b.strg.Supplier().GetList(ctx, req)
 
-// 	if err != nil {
-// 		b.log.Error("!!!GetBooksList--->", logger.Error(err))
-// 		return nil, status.Error(codes.InvalidArgument, err.Error())
-// 	}
+	if err != nil {
+		b.log.Error("!!!GetSuppliersList--->", logger.Error(err))
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
 
-// 	return resp, err
-// }
+	return resp, err
+}
 
 func (b *supplierService) Update(ctx context.Context, req *organization_service.UpdateSupplierRequest) (resp *organization_service.Supplier, err error) {
 	b.log.Info("---UpdateSupplier--->", logger.Any("req", req))

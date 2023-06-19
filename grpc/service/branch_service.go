@@ -55,18 +55,18 @@ func (b *branchService) Get(ctx context.Context, req *organization_service.Prima
 	return resp, err
 }
 
-// func (b *branchService) GetBooksList(ctx context.Context, req *book_service.GetBooksListRequest) (resp *book_service.GetBooksListResponse, err error) {
-// 	b.log.Info("---GetBooksList--->", logger.Any("req", req))
+func (b *branchService) GetList(ctx context.Context, req *organization_service.GetListBranchRequest) (resp *organization_service.GetBranchsListResponse, err error) {
+	b.log.Info("---GetBranchsList--->", logger.Any("req", req))
 
-// 	resp, err = b.strg.Book().GetList(ctx, req)
+	resp, err = b.strg.Branch().GetList(ctx, req)
 
-// 	if err != nil {
-// 		b.log.Error("!!!GetBooksList--->", logger.Error(err))
-// 		return nil, status.Error(codes.InvalidArgument, err.Error())
-// 	}
+	if err != nil {
+		b.log.Error("!!!GetBranchsList--->", logger.Error(err))
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
 
-// 	return resp, err
-// }
+	return resp, err
+}
 
 func (b *branchService) Update(ctx context.Context, req *organization_service.UpdateBranchRequest) (resp *organization_service.Branch, err error) {
 	b.log.Info("---UpdateBranch--->", logger.Any("req", req))

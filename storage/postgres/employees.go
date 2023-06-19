@@ -103,91 +103,78 @@ func (b *employeesRepo) Get(ctx context.Context, req *organization_service.Prima
 }
 
 func (b *employeesRepo) GetList(ctx context.Context, req *organization_service.GetEmployeesListRequest) (resp *organization_service.GetEmployeessListResponse, err error) {
-	// resp = &organization_service.GetBranchsListResponse{}
-	// var (
-	// 	params      (map[string]interface{})
-	// 	filter      string
-	// 	order       string
-	// 	arrangement string
-	// 	offset      string
-	// 	limit       string
-	// 	q           string
-	// )
+	resp = &organization_service.GetEmployeessListResponse{}
+	var (
+		params      (map[string]interface{})
+		filter      string
+		order       string
+		arrangement string
+		offset      string
+		limit       string
+		q           string
+	)
+	params = map[string]interface{}{}
 
-	// params = map[string]interface{}{}
+	query := `SELECT 
+				id, 
+				first_name, 
+				last_name,
+				store_id,
+				phone_number,
+				login,
+				password_hash,
+				role
+			FROM employees `
+	filter = " WHERE true"
 
-	// query := `select
-	// 			id,
-	// 			name,
-	// 			number_of_pages,
-	// 			created_at,
-	// 			updated_at
-	// 		from books`
-	// filter = " WHERE true"
-	// order = " ORDER BY created_at"
-	// arrangement = " DESC"
-	// offset = " OFFSET 0"
-	// limit = " LIMIT 10"
+	if len(req.GetFirstName()) > 0 {
+		filter += " AND first_name ILIKE '%' || '" + req.GetFirstName() + "' || '%' "
+	}
 
-	// if req.Page > 0 {
-	// 	req.Page = (req.Page - 1) * req.Limit
-	// 	params["offset"] = req.Page
-	// 	offset = " OFFSET @offset"
-	// }
+	if len(req.GetLastName()) > 0 {
+		filter += " AND last_name ILIKE '%' || '" + req.GetLastName() + "' || '%' "
+	}
 
-	// if req.Limit > 0 {
-	// 	params["limit"] = req.Limit
-	// 	limit = " LIMIT @limit"
-	// }
+	if len(req.GetPhoneNumber()) > 0 {
+		filter += " AND phone_number ILIKE '%' || '" + req.GetPhoneNumber() + "' || '%' "
+	}
 
-	// cQ := `SELECT count(1) FROM books` + filter
+	cQ := `SELECT count(1) FROM employees` + filter
 
-	// err = b.db.QueryRow(ctx, cQ, pgx.NamedArgs(params)).Scan(
-	// 	&resp.Count,
-	// )
+	err = b.db.QueryRow(ctx, cQ, pgx.NamedArgs(params)).Scan(
+		&resp.Count,
+	)
+	if err != nil {
+		return resp, err
+	}
 
-	// if err != nil {
-	// 	return resp, err
-	// }
+	q = query + filter + order + arrangement + offset + limit
 
-	// q = query + filter + order + arrangement + offset + limit
+	rows, err := b.db.Query(ctx, q, pgx.NamedArgs(params))
+	if err != nil {
+		return resp, err
+	}
+	defer rows.Close()
 
-	// rows, err := b.db.Query(ctx, q, pgx.NamedArgs(params))
-	// if err != nil {
-	// 	return resp, err
-	// }
-	// defer rows.Close()
+	for rows.Next() {
+		result := &organization_service.Employees{}
 
-	// for rows.Next() {
-	// 	book := &book_service.Book{}
-	// 	result := &Book{}
+		err = rows.Scan(
+			&result.Id,
+			&result.FirstName,
+			&result.LastName,
+			&result.StoreId,
+			&result.PhoneNumber,
+			&result.Login,
+			&result.PasswordHash,
+			&result.Role,
+		)
+		if err != nil {
+			return resp, err
+		}
 
-	// 	err = rows.Scan(
-	// 		&result.Id,
-	// 		&result.Name,
-	// 		&result.NumberOfPages,
-	// 		&result.CreatedAt,
-	// 		&result.UpdatedAt,
-	// 	)
-
-	// 	if err != nil {
-	// 		return resp, err
-	// 	}
-
-	// 	if result.CreatedAt.Valid {
-	// 		book.CreatedAt = result.CreatedAt.String
-	// 	}
-
-	// 	if result.UpdatedAt.Valid {
-	// 		book.UpdatedAt = result.UpdatedAt.String
-	// 	}
-
-	// 	book.Id = result.Id
-	// 	book.Name = result.Name
-	// 	book.NumberOfPages = result.NumberOfPages
-
-	// 	resp.Books = append(resp.Books, book)
-	// }
+		resp.Employeess = append(resp.Employeess, result)
+	}
 
 	return
 }
@@ -205,14 +192,14 @@ func (b *employeesRepo) Update(ctx context.Context, req *organization_service.Up
 		id = @id`
 
 	params := map[string]interface{}{
-		"id":           req.Employees.Id,
-		"first_name":  req.Employees.FirstName,
-		"last_name":         req.Employees.LastName,
+		"id":            req.Employees.Id,
+		"first_name":    req.Employees.FirstName,
+		"last_name":     req.Employees.LastName,
 		"store_id":      req.Employees.StoreId,
-		"phone_number": req.Employees.PhoneNumber,
+		"phone_number":  req.Employees.PhoneNumber,
 		"login":         req.Employees.Login,
-		"password_hash":      req.Employees.PasswordHash,
-		"role": req.Employees.Role,
+		"password_hash": req.Employees.PasswordHash,
+		"role":          req.Employees.Role,
 	}
 
 	result, err := b.db.Exec(ctx, query, pgx.NamedArgs(params))

@@ -78,91 +78,60 @@ func (b *storeRepo) Get(ctx context.Context, req *organization_service.PrimaryKe
 }
 
 func (b *storeRepo) GetList(ctx context.Context, req *organization_service.GetListStoreRequest) (resp *organization_service.GetStoresListResponse, err error) {
-	// resp = &organization_service.GetBranchsListResponse{}
-	// var (
-	// 	params      (map[string]interface{})
-	// 	filter      string
-	// 	order       string
-	// 	arrangement string
-	// 	offset      string
-	// 	limit       string
-	// 	q           string
-	// )
+	resp = &organization_service.GetStoresListResponse{}
+	var (
+		params      (map[string]interface{})
+		filter      string
+		order       string
+		arrangement string
+		offset      string
+		limit       string
+		q           string
+	)
+	params = map[string]interface{}{}
 
-	// params = map[string]interface{}{}
+	query := `SELECT 
+				id, 
+				branch_id, 
+				name
+			FROM store `
+	filter = " WHERE true"
 
-	// query := `select
-	// 			id,
-	// 			name,
-	// 			number_of_pages,
-	// 			created_at,
-	// 			updated_at
-	// 		from books`
-	// filter = " WHERE true"
-	// order = " ORDER BY created_at"
-	// arrangement = " DESC"
-	// offset = " OFFSET 0"
-	// limit = " LIMIT 10"
+	if len(req.GetName()) > 0 {
+		filter += " AND name ILIKE '%' || '" + req.GetName() + "' || '%' "
+	}
 
-	// if req.Page > 0 {
-	// 	req.Page = (req.Page - 1) * req.Limit
-	// 	params["offset"] = req.Page
-	// 	offset = " OFFSET @offset"
-	// }
+	cQ := `SELECT count(1) FROM store` + filter
 
-	// if req.Limit > 0 {
-	// 	params["limit"] = req.Limit
-	// 	limit = " LIMIT @limit"
-	// }
+	err = b.db.QueryRow(ctx, cQ, pgx.NamedArgs(params)).Scan(
+		&resp.Count,
+	)
+	if err != nil {
+		return resp, err
+	}
 
-	// cQ := `SELECT count(1) FROM books` + filter
+	q = query + filter + order + arrangement + offset + limit
 
-	// err = b.db.QueryRow(ctx, cQ, pgx.NamedArgs(params)).Scan(
-	// 	&resp.Count,
-	// )
+	rows, err := b.db.Query(ctx, q, pgx.NamedArgs(params))
+	if err != nil {
+		return resp, err
+	}
+	defer rows.Close()
 
-	// if err != nil {
-	// 	return resp, err
-	// }
+	for rows.Next() {
+		result := &organization_service.Store{}
 
-	// q = query + filter + order + arrangement + offset + limit
+		err = rows.Scan(
+			&result.Id,
+			&result.BranchId,
+			&result.Name,
+		)
+		if err != nil {
+			return resp, err
+		}
 
-	// rows, err := b.db.Query(ctx, q, pgx.NamedArgs(params))
-	// if err != nil {
-	// 	return resp, err
-	// }
-	// defer rows.Close()
-
-	// for rows.Next() {
-	// 	book := &book_service.Book{}
-	// 	result := &Book{}
-
-	// 	err = rows.Scan(
-	// 		&result.Id,
-	// 		&result.Name,
-	// 		&result.NumberOfPages,
-	// 		&result.CreatedAt,
-	// 		&result.UpdatedAt,
-	// 	)
-
-	// 	if err != nil {
-	// 		return resp, err
-	// 	}
-
-	// 	if result.CreatedAt.Valid {
-	// 		book.CreatedAt = result.CreatedAt.String
-	// 	}
-
-	// 	if result.UpdatedAt.Valid {
-	// 		book.UpdatedAt = result.UpdatedAt.String
-	// 	}
-
-	// 	book.Id = result.Id
-	// 	book.Name = result.Name
-	// 	book.NumberOfPages = result.NumberOfPages
-
-	// 	resp.Books = append(resp.Books, book)
-	// }
+		resp.Stores = append(resp.Stores, result)
+	}
 
 	return
 }
@@ -175,9 +144,9 @@ func (b *storeRepo) Update(ctx context.Context, req *organization_service.Update
 		id = @id`
 
 	params := map[string]interface{}{
-		"id":          req.Store.Id,
+		"id":        req.Store.Id,
 		"branch_id": req.Store.BranchId,
-		"name":req.Store.Name,
+		"name":      req.Store.Name,
 	}
 
 	result, err := b.db.Exec(ctx, query, pgx.NamedArgs(params))

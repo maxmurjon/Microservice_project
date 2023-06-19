@@ -55,18 +55,18 @@ func (b *storeService) Get(ctx context.Context, req *organization_service.Primar
 	return resp, err
 }
 
-// func (b *storeService) GetBooksList(ctx context.Context, req *book_service.GetBooksListRequest) (resp *book_service.GetBooksListResponse, err error) {
-// 	b.log.Info("---GetBooksList--->", logger.Any("req", req))
+func (b *storeService) GetList(ctx context.Context, req *organization_service.GetListStoreRequest) (resp *organization_service.GetStoresListResponse, err error) {
+	b.log.Info("---GetStoresList--->", logger.Any("req", req))
 
-// 	resp, err = b.strg.Book().GetList(ctx, req)
+	resp, err = b.strg.Store().GetList(ctx, req)
 
-// 	if err != nil {
-// 		b.log.Error("!!!GetBooksList--->", logger.Error(err))
-// 		return nil, status.Error(codes.InvalidArgument, err.Error())
-// 	}
+	if err != nil {
+		b.log.Error("!!!GetStoresList--->", logger.Error(err))
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
 
-// 	return resp, err
-// }
+	return resp, err
+}
 
 func (b *storeService) Update(ctx context.Context, req *organization_service.UpdateStoreRequest) (resp *organization_service.Store, err error) {
 	b.log.Info("---UpdateStore--->", logger.Any("req", req))
